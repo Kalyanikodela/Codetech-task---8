@@ -1,0 +1,155 @@
+# ==============================================================================
+# 1. ENVIRONMENT SETUP & DEPENDENCIES
+# ==============================================================================
+# Install required libraries if not already present
+# !pip install pandas scikit-learn nltk matplotlib seaborn
+
+import re
+import matplotlib.pyplot as plt
+import nltk
+import pandas as pd
+import seaborn as sns
+from nltk.corpus import stopwords
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+)
+from sklearn.model_selection import train_test_split
+
+# Download the stop words list from NLTK
+nltk.download("stopwords")
+
+# ==============================================================================
+# 2. DATASET CREATION (MOCK DATA FOR TESTING)
+# ==============================================================================
+# Creating a dummy dataset of reviews to make the notebook immediately runnable
+data = {
+    "review_text": [
+        "I absolutely love this product! It works perfectly and saved me hours.",
+        "Worst purchase ever. The item arrived broken and customer service was rude.",
+        "Great value for the money. Highly recommend to everyone.",
+        "Terrible quality. It stopped working after just two days.",
+        "It is okay, does the job but nothing special or amazing.",
+        "Excellent build quality and fast shipping. Very happy!",
+        "Disappointed. The product looks completely different from the pictures.",
+        "Waste of money. Avoid this seller at all costs.",
+        "Super functional, easy to use, and beautiful design.",
+        "Horrible experience. The app crashes every time I open it.",
+    ],
+    "sentiment": [
+        "Positive",
+        "Negative",
+        "Positive",
+        "Negative",
+        "Neutral",
+        "Positive",
+        "Negative",
+        "Negative",
+        "Positive",
+        "Negative",
+    ],
+}
+
+df = pd.DataFrame(data)
+print("--- Raw Dataset Sample ---")
+print(df.head())
+
+
+# ==============================================================================
+# 3. DATA PREPROCESSING
+# ==============================================================================
+def clean_text(text):
+    # Remove HTML tags if any
+    text = re.sub(r"<[^>]*>", "", text)
+    # Remove punctuation and numbers, keeping only alphabets and spaces
+    text = re.sub(r"[^a-zA-Z\s]", "", text)
+    # Convert to lowercase
+    text = text.lower()
+    # Split text into individual words
+    words = text.split()
+    # Remove English stopwords (words like 'the', 'is', 'at' that lack sentiment)
+    stop_words = set(stopwords.words("english"))
+    meaningful_words = [w for w in words if w not in stop_words]
+    # Join back into a single string
+    return " ".join(meaningful_words)
+
+
+# Apply the cleaning function to the dataset
+df["cleaned_text"] = df["review_text"].apply(clean_text)
+
+print("\n--- Preprocessed Data Preview ---")
+print(df[["review_text", "cleaned_text"]].head())
+
+# ==============================================================================
+# 4. MODEL IMPLEMENTATION
+# ==============================================================================
+# Split the dataset into Features (X) and Target Labels (y)
+X = df["cleaned_text"]
+y = df["sentiment"]
+
+# Split into Training (80%) and Testing (20%) sets
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+# Convert text data into numbers using TF-IDF Vectorization
+tfidf = TfidfVectorizer(max_features=5000)
+X_train_tfidf = tfidf.fit_transform(X_train)
+X_test_tfidf = tfidf.transform(X_test)
+
+# Train a Logistic Regression model
+model = LogisticRegression()
+model.fit(X_train_tfidf, y_train)
+
+# Generate predictions on the test set
+y_pred = model.predict(X_test_tfidf)
+
+# ==============================================================================
+# 5. EVALUATION & INSIGHTS
+# ==============================================================================
+# Calculate overall accuracy
+accuracy = accuracy_score(y_test, y_pred)
+print("\n--- Model Evaluation ---")
+print(f"Overall Accuracy: {accuracy * 100:.2f}%\n")
+
+# Print detailed classification report (Precision, Recall, F1-Score)
+print("Classification Report:")
+print(classification_report(y_test, y_pred, zero_division=0))
+
+# Plot Confusion Matrix for visual insight
+cm = confusion_matrix(y_test, y_pred)
+plt.figure(figsize=(6, 4))
+sns.heatmap(
+    cm,
+    annot=True,
+    fmt="d",
+    cmap="Blues",
+    xticklabels=model.classes_,
+    yticklabels=model.classes_,
+)
+plt.title("Confusion Matrix")
+plt.ylabel("Actual Label")
+plt.xlabel("Predicted Label")
+plt.show()
+
+# ==============================================================================
+# 6. LIVE INFERENCE CODE BLOCK
+# ==============================================================================
+print("\n--- Live Sample Prediction ---")
+
+
+def predict_new_review(new_review):
+    cleaned = clean_text(new_review)
+    vectorized = tfidf.transform([cleaned])
+    prediction = model.predict(vectorized)[0]
+    return prediction
+
+
+# Test user-provided strings
+sample_review = "The delivery took too long, but the product itself is decent."
+result = predict_new_review(sample_review)
+print(f"Review: '{sample_review}'")
+print(f"Predicted Sentiment: {result}")
